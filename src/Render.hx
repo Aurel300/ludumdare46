@@ -26,6 +26,7 @@ class Render {
   // debug
   public static var debugText:String->Void;
   public static var debugHp:String->Void;
+  public static var debugBeat:String->Void;
 
   public static function shake(am:Int):Void {
     shakeAmount += am;
@@ -67,6 +68,7 @@ class Render {
     });
     debugText = Debug.text("Text");
     debugHp = Debug.text("HP");
+    debugBeat = Debug.text("Beat");
 
       /*
     Main.input.mouse.up.on(e -> {
@@ -96,7 +98,8 @@ class Render {
       case Intro:
         debugText("space to start");
       case GamePlaying:
-        debugText("game in progress");
+        debugText("game");
+        debugBeat('${Game.totalBeat} ${Game.diff} ${Game.tempoBpm}');
         // logic
         Game.tick(delta);
         // debug
@@ -141,18 +144,26 @@ class Render {
                 drawCM(tcX, tcY, 1, 0, 10, 15);
               case It if (iframePhase):
                 drawCM(tcX, tcY + (Game.itHeld ? -10 : 10), 0, 1, 20, 10);
-              case Barrage(pl, Up, beat):
+              case Barrage(bt, Up, beat):
+                var pl = bt.match(HurtsPlayer | HurtsBoth);
+                var pi = bt.match(HurtsIt | HurtsBoth);
                 var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
-                drawCM(tcX, tcY + tileHH + (off >> 1), pl ? 1 : 0, pl ? 0 : 1, tileW - 10, 10 + off);
-              case Barrage(pl, Down, beat):
+                drawCM(tcX, tcY + tileHH + (off >> 1), pl ? 1 : 0, pi ? 1 : 0, tileW - 10, 10 + off);
+              case Barrage(bt, Down, beat):
+                var pl = bt.match(HurtsPlayer | HurtsBoth);
+                var pi = bt.match(HurtsIt | HurtsBoth);
                 var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
-                drawCM(tcX, tcY - tileHH - (off >> 1), pl ? 1 : 0, pl ? 0 : 1, tileW - 10, 10 + off);
-              case Barrage(pl, Left, beat):
+                drawCM(tcX, tcY - tileHH - (off >> 1), pl ? 1 : 0, pi ? 1 : 0, tileW - 10, 10 + off);
+              case Barrage(bt, Left, beat):
+                var pl = bt.match(HurtsPlayer | HurtsBoth);
+                var pi = bt.match(HurtsIt | HurtsBoth);
                 var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
-                drawCM(tcX + tileWH + (off >> 1), tcY, pl ? 1 : 0, pl ? 0 : 1, 10 + off, tileH - 10);
-              case Barrage(pl, Right, beat):
+                drawCM(tcX + tileWH + (off >> 1), tcY, pl ? 1 : 0, pi ? 1 : 0, 10 + off, tileH - 10);
+              case Barrage(bt, Right, beat):
+                var pl = bt.match(HurtsPlayer | HurtsBoth);
+                var pi = bt.match(HurtsIt | HurtsBoth);
                 var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
-                drawCM(tcX - tileWH - (off >> 1), tcY, pl ? 1 : 0, pl ? 0 : 1, 10 + off, tileH - 10);
+                drawCM(tcX - tileWH - (off >> 1), tcY, pl ? 1 : 0, pi ? 1 : 0, 10 + off, tileH - 10);
               case _:
             }
           }

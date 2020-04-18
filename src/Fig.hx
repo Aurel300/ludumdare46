@@ -2,7 +2,7 @@
 enum Fig {
   Player(facingRight:Bool);
   It;
-  Barrage(hurtsPlayer:Bool, dir:Dir, beat:Int);
+  Barrage(type:BulletType, dir:Dir, beat:Int);
   // Powerup
   // Coin
   // ...
@@ -11,9 +11,9 @@ enum Fig {
 class FigTools {
   public static function tick(f:Fig, at:Tile):Bool {
     return (switch (f) {
-      case Barrage(hurtsPlayer, dir, beat):
+      case Barrage(type, dir, beat):
         if (Game.justBeat && Game.currentBeat == beat) {
-          if (Game.damage(hurtsPlayer, at.x, at.y)) false;
+          if (Game.damage(type, at.x, at.y)) false;
           else {
             at.arena.get(at.x + dir.x, at.y + dir.y).pushNext(f);
             false;

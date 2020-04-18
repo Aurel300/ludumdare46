@@ -1,4 +1,6 @@
 enum abstract Dir(Int) from Int to Int {
+  public static final ALL = [Up, Right, Down, Left];
+
   public static function fromDelta(x:Int, y:Int):Dir {
     return (switch [x, y] {
       case [0, -1]: Up;
@@ -21,6 +23,16 @@ enum abstract Dir(Int) from Int to Int {
   var Right;
   var Down;
   var Left;
+
+  public var cw(get, never):Dir;
+  function get_cw():Dir {
+    return (this + 1) % 4;
+  }
+
+  public var acw(get, never):Dir;
+  function get_acw():Dir {
+    return (this + 3) % 4;
+  }
 
   public var x(get, never):Int;
   function get_x():Int {

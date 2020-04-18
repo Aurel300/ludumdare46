@@ -15,6 +15,9 @@ class Main {
     /*Debug.button("reload png", () -> aPng.reload());*/
     Debug.button("reload shade", () -> aShade.reload());
     aShade = Asset.load(null, "shade.glw");
+    aShade.loadSignal.on(asset -> {
+      Wave.init(asset.pack["waves.txt"].text);
+    });
     /*aPng = Asset.load(null, "png.glw");
     aWav = Asset.load(null, "wav.glw");
     aMusic = Asset.load(null, "music.glw");
