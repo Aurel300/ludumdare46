@@ -94,10 +94,13 @@ class Render {
   }
 
   public static function tick(delta:Float):Void {
+    Music.autoTick(delta);
     switch (screen) {
       case Intro:
+        Music.selectMusic(PatGame);
         debugText("space to start");
       case GamePlaying:
+        Music.selectMusic(PatGame);
         debugText("game");
         debugBeat('${Game.totalBeat} ${Game.diff} ${Game.tempoBpm}');
         // logic

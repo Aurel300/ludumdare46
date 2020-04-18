@@ -11,20 +11,20 @@ class Game {
   public static final PROG_MUL = 8;
   public static final PROGRESSION = [
       0 => () -> { diff = 1; },
-     10 => () -> { diff = 1; baseBpm = BASE_TEMPO + 30.; },
-     20 => () -> { diff = 2; baseBpm = BASE_TEMPO - 20.; },
-     25 => () -> { diff = 2; baseBpm = BASE_TEMPO - 10.; },
-     40 => () -> { diff = 2; baseBpm = BASE_TEMPO; },
-     43 => () -> { diff = 2; baseBpm = BASE_TEMPO + 10.; },
-     46 => () -> { diff = 2; baseBpm = BASE_TEMPO + 20.; },
-     60 => () -> { diff = 3; baseBpm = BASE_TEMPO; },
-     65 => () -> { diff = 3; baseBpm = BASE_TEMPO + 40.; },
-     70 => () -> { diff = 3; baseBpm = BASE_TEMPO + 80.; },
-     75 => () -> { diff = 3; baseBpm = BASE_TEMPO + 120.; },
-     90 => () -> { diff = 1; baseBpm = BASE_TEMPO + 240.; },
-    100 => () -> { diff = 2; baseBpm = BASE_TEMPO + 120.; },
-    110 => () -> { diff = 4; baseBpm = BASE_TEMPO + 40.; },
-    130 => () -> { diff = 5; baseBpm = BASE_TEMPO + 20.; },
+     10 => () -> { diff = 1; targetBpm = BASE_TEMPO + 30.; },
+     20 => () -> { diff = 2; targetBpm = BASE_TEMPO - 20.; },
+     25 => () -> { diff = 2; targetBpm = BASE_TEMPO - 10.; },
+     40 => () -> { diff = 2; targetBpm = BASE_TEMPO; },
+     43 => () -> { diff = 2; targetBpm = BASE_TEMPO + 10.; },
+     46 => () -> { diff = 2; targetBpm = BASE_TEMPO + 20.; },
+     60 => () -> { diff = 3; targetBpm = BASE_TEMPO; },
+     65 => () -> { diff = 3; targetBpm = BASE_TEMPO + 40.; },
+     70 => () -> { diff = 3; targetBpm = BASE_TEMPO + 80.; },
+     75 => () -> { diff = 3; targetBpm = BASE_TEMPO + 120.; },
+     90 => () -> { diff = 1; targetBpm = BASE_TEMPO + 240.; },
+    100 => () -> { diff = 2; targetBpm = BASE_TEMPO + 120.; },
+    110 => () -> { diff = 4; targetBpm = BASE_TEMPO + 40.; },
+    130 => () -> { diff = 5; targetBpm = BASE_TEMPO + 20.; },
   ];
 
   public static var rng:Chance = new Chance(0x3821BEBA);
@@ -51,15 +51,12 @@ class Game {
   public static var tempo:Float; // ms per beat
   public static var baseBpm:Float;
   public static var tempoBpm:Float;
+  public static var targetBpm:Float;
   public static var tempoCtr:Float; // ms counter
   public static var totalBeat:Int;
   // controls
   public static var ctrlMovingTimer:Float;
   public static var ctrlMoved:Bool;
-
-  static inline function makeTempo(bpm:Float):Float {
-    return 1000. / (bpm / 60.);
-  }
 
   public static function init():Void {
     rng = new Chance(Std.int(Math.random() * 0x7FFFFFFF));
@@ -78,6 +75,7 @@ class Game {
         case _:
       }
     });
+    Debug.button("BPM!", () -> totalBeat += 100);
   }
 
   public static function damage(type:BulletType, x:Int, y:Int):Bool {
@@ -142,7 +140,7 @@ class Game {
     arena = new Arena(initW, initH, 1);
     currentBeat = 0;
     beatMax = 4;
-    tempo = makeTempo(tempoBpm = baseBpm = BASE_TEMPO);
+    tempo = Music.makeTempo(tempoBpm = targetBpm = baseBpm = BASE_TEMPO);
     tempoCtr = 0;
     totalBeat = 0;
     playerHp = MAX_HP;
@@ -171,6 +169,7 @@ class Game {
       playerIframes -= delta;
       if (playerIframes < 0) playerIframes = 0;
     }
+    Music.autoTick(delta);
     if (tempoCtr >= tempo) {
       tempoCtr -= tempo;
       currentBeat++;
@@ -223,8 +222,11 @@ class Game {
         PROGRESSION[Std.int(totalBeat / PROG_MUL)]();
         tempoCtr = 0;
       }
+      baseBpm = baseBpm * .9 + targetBpm * .1;
+      if (Math.abs(targetBpm - baseBpm) < 5) baseBpm = targetBpm;
       tempoBpm = baseBpm + totalBeat * LINEAR_TEMPO;
-      tempo = makeTempo(tempoBpm);
+      Music.autoBpm = tempoBpm;
+      tempo = Music.makeTempo(tempoBpm);
       totalBeat++;
       waves = waves.filter(w -> {
         var ret = w.beat();

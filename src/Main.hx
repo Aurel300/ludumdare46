@@ -8,10 +8,11 @@ class Main {
 
   public static function main():Void window.onload = _ -> {
     var canvas = document.querySelector("canvas");
+    Debug.init();
+    Music.init();
     input = new Input(document.body, canvas);
     Game.init();
     // Save.init();
-    Debug.init();
     /*Debug.button("reload png", () -> aPng.reload());*/
     Debug.button("reload shade", () -> aShade.reload());
     aShade = Asset.load(null, "shade.glw");
@@ -29,6 +30,7 @@ class Main {
     var loaded = 0;*/
     // Game.start(Classic(3, 3, 0));
     Render.init(cast canvas);
+    Music.play();
     /*
     for (asset in [aPng, aWav, aShade, aMusic]) asset.loadSignal.on(_ -> {
       loaded++;
