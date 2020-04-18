@@ -1,0 +1,10 @@
+-lib howlerjs
+-p /DevProjects/Repos/glewb/src/common
+-p /DevProjects/Repos/glewb/src/js
+-p src
+-m Main
+-js bin/game.js
+# --macro glewb.asset.Packer.run("png", "bin/png.glw")
+--macro glewb.asset.Packer.run("shade", "bin/shade.glw")
+# --macro glewb.asset.Packer.run("wav", "bin/wav.glw")
+# --macro glewb.asset.Packer.run("mp3/mp3", "bin/music.glw")
