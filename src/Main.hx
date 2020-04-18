@@ -9,7 +9,7 @@ class Main {
   public static function main():Void window.onload = _ -> {
     var canvas = document.querySelector("canvas");
     input = new Input(document.body, canvas);
-    Game.initInput(input);
+    Game.init();
     // Save.init();
     Debug.init();
     /*Debug.button("reload png", () -> aPng.reload());*/
@@ -24,9 +24,8 @@ class Main {
       Set.init(asset.pack["sets.txt"].text);
     });
     var loaded = 0;*/
-    Game.start(Classic(3, 3, 0));
-    ren = new Render(cast canvas);
-    ren.start();
+    // Game.start(Classic(3, 3, 0));
+    Render.init(cast canvas);
     /*
     for (asset in [aPng, aWav, aShade, aMusic]) asset.loadSignal.on(_ -> {
       loaded++;

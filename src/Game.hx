@@ -1,9 +1,18 @@
 class Game {
+  public static final IFRAME_LENGTH_MS = 2000.;
+  public static final MAX_HP = 5;
+  public static final MAX_STAMINA = 50.;
+  public static final RATE_STAMINA_USE = 0.5;
+  public static final RATE_STAMINA_REPLENISH = 0.7;
+  public static final RATE_STAMINA_REPLENISH_S = 0.3;
+
   public static var rng:Chance = new Chance(0x3821BEBA);
-  public static var input:Input;
   public static var arena:Arena;
   // state
   public static var playerHp:Int;
+  public static var playerStamina:Float;
+  public static var playerIframes:Float;
+  public static var playerSframes:Bool;
   public static var playerX:Int;
   public static var playerY:Int;
   public static var itX:Int;
@@ -23,27 +32,33 @@ class Game {
     return 1000. / (bpm / 60.);
   }
 
-  public static function initInput(input:Input):Void {
-    Game.input = input;
-    input.keyboard.down.on(function (key):Void switch (key) { // TODO: check pause, etc first
-      case ArrowUp: playerMove(0, -1, true);
-      case ArrowDown: playerMove(0, 1, true);
-      case ArrowLeft: playerMove(-1, 0, true);
-      case ArrowRight: playerMove(1, 0, true);
-      case Space:
-        if (itHeld)
-          itHeld = false;
-        else if (playerX == itX && playerY == itY)
-          itHeld = true;
-      case _:
+  public static function init():Void {
+    input.keyboard.down.on(function (key):Void {
+      if (Render.screen != GamePlaying) return;
+      switch (key) { // TODO: check pause, etc first
+        case ArrowUp: playerMove(0, -1, true);
+        case ArrowDown: playerMove(0, 1, true);
+        case ArrowLeft: playerMove(-1, 0, true);
+        case ArrowRight: playerMove(1, 0, true);
+        case Space:
+          if (itHeld)
+            itHeld = false;
+          else if (playerX == itX && playerY == itY && !playerSframes)
+            itHeld = true;
+        case _:
+      }
     });
   }
 
   public static function damage(dmgPlayer:Bool, x:Int, y:Int):Bool {
     var didHit = (dmgPlayer ? (playerX == x && playerY == y) : (itX == x && itY == y));
-    if (didHit) {
-      // TODO: lives, sfx, etc, i-frames
-      Main.ren.shake(10);
+    if (didHit && playerIframes == 0) {
+      playerHp--;
+      playerIframes = IFRAME_LENGTH_MS;
+      Render.shake(10);
+      if (playerHp <= 0) {
+        Render.screen = GameOver;
+      }
     }
     return didHit;
   }
@@ -91,7 +106,10 @@ class Game {
     beatMax = 4;
     tempo = makeTempo(tempoBpm = 240);
     tempoCtr = 0;
-    playerHp = 0;
+    playerHp = MAX_HP;
+    playerStamina = MAX_STAMINA;
+    playerIframes = 0;
+    playerSframes = false;
     playerX = itX = initW >> 1;
     playerY = itY = initH >> 1;
     arena.get(playerX, playerY).push(Player(true));
@@ -104,11 +122,31 @@ class Game {
     // beats
     tempoCtr += delta;
     justBeat = false;
+    if (playerIframes > 0) {
+      playerIframes -= delta;
+      if (playerIframes < 0) playerIframes = 0;
+    }
     if (tempoCtr >= tempo) {
       tempoCtr -= tempo;
       currentBeat++;
       currentBeat %= beatMax;
       justBeat = true;
+    }
+    // stamina
+    if (itHeld) {
+      playerStamina -= RATE_STAMINA_USE; // tempo, delta
+      if (playerStamina < 0) {
+        playerStamina = 0;
+        itHeld = false;
+        playerSframes = true;
+        Render.shake(5);
+      }
+    } else {
+      playerStamina += (playerSframes ? RATE_STAMINA_REPLENISH_S : RATE_STAMINA_REPLENISH);
+      if (playerStamina >= MAX_STAMINA) {
+        playerStamina = MAX_STAMINA;
+        playerSframes = false;
+      }
     }
     // hold controls
     if (itHeld) {

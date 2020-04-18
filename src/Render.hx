@@ -4,30 +4,35 @@ class Render {
   public static inline final WH:Int = 300 >> 1;
   public static inline final HH:Int = 240 >> 1;
 
-  var rng = new Chance(0xBEBA1337);
-  var cameraX:Float;
-  var cameraY:Float;
-  var cameraTX:Float;
-  var cameraTY:Float;
-  var cameraXI:Int; // rounded
-  var cameraYI:Int;
-  var shakeAmount:Int;
-  var surf:Surface;
-  var vertexCount = 0;
-  var bufferPosition:Buffer;
-  var bufferUV:Buffer;
-  var bufferAlpha:Buffer;
-  //var uniformLight:Uniform;
-  var texW:Int = 512;
-  var texH:Int = 512;
-  var renderCalls = 0;
+  public static var rng = new Chance(0xBEBA1337);
+  public static var cameraX:Float;
+  public static var cameraY:Float;
+  public static var cameraTX:Float;
+  public static var cameraTY:Float;
+  public static var cameraXI:Int; // rounded
+  public static var cameraYI:Int;
+  public static var shakeAmount:Int;
+  public static var surf:Surface;
+  public static var vertexCount = 0;
+  public static var bufferPosition:Buffer;
+  public static var bufferUV:Buffer;
+  public static var bufferAlpha:Buffer;
+  //public static var uniformLight:Uniform;
+  public static var texW:Int = 512;
+  public static var texH:Int = 512;
+  public static var renderCalls = 0;
+  public static var screen = Intro;
 
-  public function shake(am:Int):Void {
+  // debug
+  public static var debugText:String->Void;
+  public static var debugHp:String->Void;
+
+  public static function shake(am:Int):Void {
     shakeAmount += am;
     // TODO: limit ?
   }
 
-  public function new(canvas:js.html.CanvasElement) {
+  public static function init(canvas:js.html.CanvasElement):Void {
     surf = new Surface({
       el: canvas,
       buffers: [
@@ -60,104 +65,107 @@ class Render {
         // debugRender('$renderCalls');
       });
     });
-    // debugRooms = Debug.text("rooms rendered");
-    // debugRender = Debug.text("render calls");
+    debugText = Debug.text("Text");
+    debugHp = Debug.text("HP");
 
-    Main.input.mouse.up.on(e -> {
       /*
+    Main.input.mouse.up.on(e -> {
       var x = (e.x / 2);
       var y = (e.y / 2);
       if (x >= W - 3 - 32 && x < W - 3 - 32 + 16 && y >= 3 && y < 3 + 16)
         Sfx.enable(!Sfx.enabled);
       if (x >= W - 3 - 16 && x < W - 3 - 16 + 16 && y >= 3 && y < 3 + 16)
         Music.enable(!Music.enabled);
-      */
     });
-    Main.input.keyboard.up.on(e -> {
-      /*
-      if (e == KeyR)
-        start();
       */
-    });
-  }
-
-  public function start():Void {
-    shakeAmount = 0;
-    cameraX = cameraTX = WH;
-    cameraY = cameraTY = HH;
-    /*
-    Game.reset();
-
-    cameraX = player.room.x * Tile.TW + (player.x:Float) - WH;
-    cameraVX = 0;
-    cameraY = player.room.y * Tile.TH + (player.y:Float) - HH;
-    lightX = player.x.round() + player.room.x * Tile.TW - (cameraX + cameraVX);
-    lightY = player.y.round() + player.room.y * Tile.TH - (cameraY);
-    lightRadius = 0.8;
-
-    toast("move with $s$$ ` @ #");
-    toast("jump with $s$bX");
-    toast("you can $s$bdouble jump$s$b and $s$bgrab ledges");
-    toast("punch with $s$bC");
-    toast("drop-punch by $s$bjumping$s$b, then pressing $s$b@");
-    toast("$b$spunch the walls!$b$s");
-    */
-  }
-
-  public function tick(delta:Float):Void {
-    cameraTX = WH - (Game.playerX * 20 - (Game.arena.w - 1) * 10);
-    cameraTY = HH - (Game.playerY * 16 - (Game.arena.h - 1) * 8);
-    cameraX = cameraX * .9 + cameraTX * .1;
-    cameraY = cameraY * .9 + cameraTY * .1;
-    cameraXI = Math.round(cameraX + rng.rangeF(-shakeAmount, shakeAmount) * .4);
-    cameraYI = Math.round(cameraY + rng.rangeF(-shakeAmount, shakeAmount) * .4);
-    if (shakeAmount > 0) shakeAmount--;
-    Game.tick(delta);
-    // coordinates
-    var tileW = 70;
-    var tileH = 50;
-    var tileWH = tileW >> 1;
-    var tileHH = tileH >> 1;
-    var tileP = 5;
-    var tileWP = tileW + tileP;
-    var tileHP = tileH + tileP;
-    var arenaX = -((Game.arena.wm * tileWP - tileP) >> 1);
-    var arenaY = -((Game.arena.hm * tileHP - tileP) >> 1);
-    var ti = 0;
-    // draw tile bg
-    for (y in 0...Game.arena.hm) for (x in 0...Game.arena.wm) {
-      var tile = Game.arena.tiles[ti++];
-      if (!tile.inMargin) {
-        drawC(arenaX + x * tileWP, arenaY + y * tileHP, 0, 0, tileW, tileH);
+    input.keyboard.up.on(function (key):Void {
+      switch [screen, key] {
+        case [Intro | GameOver, Space]:
+          shakeAmount = 0;
+          cameraX = cameraTX = WH;
+          cameraY = cameraTY = HH;
+          screen = GamePlaying;
+          Game.start(Classic(3, 3, 0));
+        case _:
       }
-    }
-    // draw tile figs
-    ti = 0;
-    for (y in 0...Game.arena.hm) for (x in 0...Game.arena.wm) {
-      var tcX = arenaX + x * tileWP + tileWH;
-      var tcY = arenaY + y * tileHP + tileHH;
-      var tile = Game.arena.tiles[ti++];
-      for (f in tile.figs.concat(tile.figsNext)) {
-        switch (f) {
-          case Player(_):
-            drawCM(tcX, tcY, 1, 0, 10, 15);
-          case It:
-            drawCM(tcX, tcY + (Game.itHeld ? -10 : 10), 0, 1, 20, 10);
-          case Barrage(pl, Up, beat):
-            var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
-            drawCM(tcX, tcY + tileHH + (off >> 1), pl ? 1 : 0, pl ? 0 : 1, tileW - 10, 10 + off);
-          case Barrage(pl, Down, beat):
-            var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
-            drawCM(tcX, tcY - tileHH - (off >> 1), pl ? 1 : 0, pl ? 0 : 1, tileW - 10, 10 + off);
-          case Barrage(pl, Left, beat):
-            var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
-            drawCM(tcX + tileWH + (off >> 1), tcY, pl ? 1 : 0, pl ? 0 : 1, 10 + off, tileH - 10);
-          case Barrage(pl, Right, beat):
-            var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
-            drawCM(tcX - tileWH - (off >> 1), tcY, pl ? 1 : 0, pl ? 0 : 1, 10 + off, tileH - 10);
-          case _:
+    });
+  }
+
+  public static function tick(delta:Float):Void {
+    switch (screen) {
+      case Intro:
+        debugText("space to start");
+      case GamePlaying:
+        debugText("game in progress");
+        // logic
+        Game.tick(delta);
+        // debug
+        debugHp('${Game.playerHp}' + (Game.playerIframes > 0 ? " (inv)" : ""));
+        // render
+        cameraTX = WH - (Game.playerX * 20 - (Game.arena.w - 1) * 10);
+        cameraTY = HH - (Game.playerY * 16 - (Game.arena.h - 1) * 8);
+        cameraX = cameraX * .9 + cameraTX * .1;
+        cameraY = cameraY * .9 + cameraTY * .1;
+        cameraXI = Math.round(cameraX + rng.rangeF(-shakeAmount, shakeAmount) * .4);
+        cameraYI = Math.round(cameraY + rng.rangeF(-shakeAmount, shakeAmount) * .4);
+        if (shakeAmount > 0) shakeAmount--;
+        var iframePhase = (Game.playerIframes % 300 < 150);
+        var sframePhase = (!Game.playerSframes || Game.playerStamina % 10 < 5);
+        // coordinates
+        var tileW = 70;
+        var tileH = 50;
+        var tileWH = tileW >> 1;
+        var tileHH = tileH >> 1;
+        var tileP = 5;
+        var tileWP = tileW + tileP;
+        var tileHP = tileH + tileP;
+        var arenaX = -((Game.arena.wm * tileWP - tileP) >> 1);
+        var arenaY = -((Game.arena.hm * tileHP - tileP) >> 1);
+        var ti = 0;
+        // draw tile bg
+        for (y in 0...Game.arena.hm) for (x in 0...Game.arena.wm) {
+          var tile = Game.arena.tiles[ti++];
+          if (!tile.inMargin) {
+            drawC(arenaX + x * tileWP, arenaY + y * tileHP, 0, 0, tileW, tileH);
+          }
         }
-      }
+        // draw tile figs
+        ti = 0;
+        for (y in 0...Game.arena.hm) for (x in 0...Game.arena.wm) {
+          var tcX = arenaX + x * tileWP + tileWH;
+          var tcY = arenaY + y * tileHP + tileHH;
+          var tile = Game.arena.tiles[ti++];
+          for (f in tile.figs.concat(tile.figsNext)) {
+            switch (f) {
+              case Player(_) if (iframePhase):
+                drawCM(tcX, tcY, 1, 0, 10, 15);
+              case It if (iframePhase):
+                drawCM(tcX, tcY + (Game.itHeld ? -10 : 10), 0, 1, 20, 10);
+              case Barrage(pl, Up, beat):
+                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
+                drawCM(tcX, tcY + tileHH + (off >> 1), pl ? 1 : 0, pl ? 0 : 1, tileW - 10, 10 + off);
+              case Barrage(pl, Down, beat):
+                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
+                drawCM(tcX, tcY - tileHH - (off >> 1), pl ? 1 : 0, pl ? 0 : 1, tileW - 10, 10 + off);
+              case Barrage(pl, Left, beat):
+                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
+                drawCM(tcX + tileWH + (off >> 1), tcY, pl ? 1 : 0, pl ? 0 : 1, 10 + off, tileH - 10);
+              case Barrage(pl, Right, beat):
+                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
+                drawCM(tcX - tileWH - (off >> 1), tcY, pl ? 1 : 0, pl ? 0 : 1, 10 + off, tileH - 10);
+              case _:
+            }
+          }
+        }
+        // ui
+        draw(5, 7, 0, 0, 200, 5);
+        if (iframePhase)
+          draw(5, 5, 1, 0, Std.int((Game.playerHp / Game.MAX_HP) * 200), 5);
+        draw(5, 17, 0, 0, 200, 5);
+        if (sframePhase)
+          draw(5, 15, 1, 1, Std.int((Game.playerStamina / Game.MAX_STAMINA) * 200), 5);
+      case GameOver:
+        debugText("game over, space to restart");
     }
     /*
     if (player == null || player.room == null)
@@ -305,15 +313,15 @@ class Render {
   }
 
   // with camera
-  inline function drawC(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
+  inline static function drawC(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
     draw(x + cameraXI, y + cameraYI, tx, ty, tw, th, alpha, dalpha, flip);
   }
   // with camera, centred
-  inline function drawCM(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
+  inline static function drawCM(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
     draw(x + cameraXI - (tw >> 1), y + cameraYI - (th >> 1), tx, ty, tw, th, alpha, dalpha, flip);
   }
 
-  function draw(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
+  static function draw(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
     surf.indexBuffer.writeUI16(vertexCount);
     surf.indexBuffer.writeUI16(vertexCount + 1);
     surf.indexBuffer.writeUI16(vertexCount + 2);
@@ -378,4 +386,10 @@ class Render {
       renderCalls++;
     }
   }
+}
+
+enum RenderScreen {
+  Intro;
+  GamePlaying;
+  GameOver;
 }
