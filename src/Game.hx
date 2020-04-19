@@ -1,14 +1,15 @@
 class Game {
   public static final IFRAME_LENGTH_MS = 2000.;
   public static final MAX_HP = 5;
-  public static final MAX_STAMINA = 50.;
+  public static final MAX_STAMINA = 30.;
   public static final RATE_STAMINA_USE = 0.3;
   public static final RATE_STAMINA_REPLENISH = 0.5;
   public static final RATE_STAMINA_REPLENISH_S = 0.2;
   public static final BASE_TEMPO = 190.;
-  public static final LINEAR_TEMPO = 0.2; // per beat
+  public static final LINEAR_TEMPO = 0.4; // per beat
 
   public static final PROG_MUL = 8;
+  /*
   public static final PROGRESSION = [
       0 => () -> { diff = 1; },
      10 => () -> { diff = 1; targetBpm = BASE_TEMPO + 30.; },
@@ -26,10 +27,12 @@ class Game {
     110 => () -> { diff = 4; targetBpm = BASE_TEMPO + 40.; },
     130 => () -> { diff = 5; targetBpm = BASE_TEMPO + 20.; },
   ];
+  */
 
   public static var rng:Chance = new Chance(0x3821BEBA);
   public static var arena:Arena;
   // state
+  public static var score:Int;
   public static var playerHp:Int;
   public static var playerStamina:Float;
   public static var playerIframes:Float;
@@ -55,23 +58,34 @@ class Game {
   public static var tempoCtr:Float; // ms counter
   public static var totalBeat:Int;
   // controls
-  public static var ctrlMovingTimer:Float;
-  public static var ctrlMoved:Bool;
+  //public static var ctrlMovingTimer:Float;
+  //public static var ctrlMoved:Bool;
 
   public static function init():Void {
     rng = new Chance(Std.int(Math.random() * 0x7FFFFFFF));
     input.keyboard.down.on(function (key):Void {
       if (Render.screen != GamePlaying) return;
-      switch (key) { // TODO: check pause, etc first
-        case ArrowUp: playerMove(0, -1, true);
-        case ArrowDown: playerMove(0, 1, true);
-        case ArrowLeft: playerMove(-1, 0, true);
-        case ArrowRight: playerMove(1, 0, true);
+      switch (key) {
+        case ArrowUp: playerMove(0, -1);
+        case ArrowDown: playerMove(0, 1);
+        case ArrowLeft: playerMove(-1, 0);
+        case ArrowRight: playerMove(1, 0);
         case Space:
-          if (itHeld)
-            itHeld = false;
-          else if (playerX == itX && playerY == itY && !playerSframes)
+          if (playerX == itX && playerY == itY && !playerSframes) {
+            Sfx.play("pickup");
             itHeld = true;
+          }
+        case _:
+      }
+    });
+    input.keyboard.up.on(function (key):Void {
+      if (Render.screen != GamePlaying) return;
+      switch (key) {
+        case Space:
+          if (itHeld) {
+            Sfx.play("drop");
+            itHeld = false;
+          }
         case _:
       }
     });
@@ -89,39 +103,56 @@ class Game {
       playerIframes = IFRAME_LENGTH_MS;
       Render.shake(10);
       if (playerHp <= 0) {
+        Sfx.play("death");
         Render.screen = GameOver;
+      } else {
+        Sfx.play("hurt");
       }
     }
     return didHit;
   }
 
-  static function playerMove(dx:Int, dy:Int, tap:Bool):Void {
-    if (tap && itHeld)
-      return;
+  static function playerMove(dx:Int, dy:Int/*, tap:Bool*/):Void {
+    //if (tap && itHeld)
+    //  return;
+    var pdir = Dir.fromDelta(dx, dy);
+    var popp = Dir.fromDeltaOpp(dx, dy);
     var nx = playerX + dx;
     var ny = playerY + dy;
     if (nx < 0 || ny < 0 || nx >= arena.w || ny >= arena.h) return;
+    Sfx.play("move");
+    Render.sweep(playerX, playerY, pdir);
     var facing = false;
     arena.get(playerX, playerY).filter(f -> switch (f) {
       case Player(ff):
         facing = ff;
         false;
-      case Barrage(t = (HurtsPlayer | HurtsBoth), dir, _) if (dir == Dir.fromDeltaOpp(dx, dy)):
+      case Barrage(t = (HurtsPlayer | HurtsBoth), dir, _) if (dir == popp):
         !damage(t, playerX, playerY);
       case _: true;
     });
     playerX = nx;
     playerY = ny;
+    arena.get(playerX, playerY).filter(f -> switch (f) {
+      case Barrage(t = (HurtsPlayer | HurtsBoth), dir, _) if (dir == pdir):
+        !damage(t, playerX, playerY);
+      case _: true;
+    });
     arena.get(playerX, playerY).push(Player(dx > 0 || (dx >= 0 && facing)));
     if (itHeld) {
       arena.get(itX, itY).filter(f -> switch (f) {
         case It: false;
-        case Barrage(t = (HurtsIt | HurtsBoth), dir, _) if (dir == Dir.fromDeltaOpp(dx, dy)):
+        case Barrage(t = (HurtsIt | HurtsBoth), dir, _) if (dir == popp):
           !damage(t, itX, itY);
         case _: true;
       });
       itX = playerX;
       itY = playerY;
+      arena.get(itX, itY).filter(f -> switch (f) {
+        case Barrage(t = (HurtsIt | HurtsBoth), dir, _) if (dir == pdir):
+          !damage(t, itX, itY);
+        case _: true;
+      });
       arena.get(itX, itY).push(It);
     }
   }
@@ -143,6 +174,7 @@ class Game {
     tempo = Music.makeTempo(tempoBpm = targetBpm = baseBpm = BASE_TEMPO);
     tempoCtr = 0;
     totalBeat = 0;
+    score = 0;
     playerHp = MAX_HP;
     playerStamina = MAX_STAMINA;
     playerIframes = 0;
@@ -155,9 +187,9 @@ class Game {
     waves = [];
     waveUp = null;
     waveDown = null;
-    diff = 0;
-    ctrlMovingTimer = 0;
-    ctrlMoved = false;
+    diff = 1;
+    //ctrlMovingTimer = 0;
+    //ctrlMoved = false;
   }
 
   public static function tick(delta:Float):Void {
@@ -178,11 +210,12 @@ class Game {
     }
     // stamina
     if (itHeld) {
-      playerStamina -= RATE_STAMINA_USE * tempoMul; // tempo, delta
+      playerStamina -= RATE_STAMINA_USE * tempoMul;
       if (playerStamina < 0) {
         playerStamina = 0;
         itHeld = false;
         playerSframes = true;
+        Sfx.play("hold");
         Render.shake(5);
       }
     } else {
@@ -193,6 +226,7 @@ class Game {
       }
     }
     // hold controls
+    /*
     if (itHeld) {
       var moveX = (input.keyboard.held[ArrowLeft] ? -1 : 0) + (input.keyboard.held[ArrowRight] ? 1 : 0);
       var moveY = (input.keyboard.held[ArrowUp] ? -1 : 0) + (input.keyboard.held[ArrowDown] ? 1 : 0);
@@ -215,15 +249,24 @@ class Game {
         ctrlMovingTimer = 0;
       }
     }
+    */
     // logic
     arena.tick();
     if (justBeat) {
+      score += totalBeat * diff;
+      /*
       if (PROGRESSION.exists(Std.int(totalBeat / PROG_MUL))) {
         PROGRESSION[Std.int(totalBeat / PROG_MUL)]();
         tempoCtr = 0;
       }
-      baseBpm = baseBpm * .9 + targetBpm * .1;
-      if (Math.abs(targetBpm - baseBpm) < 5) baseBpm = targetBpm;
+      */
+      if (totalBeat >= 360) diff = 5;
+      else if (totalBeat >= 280) diff = 4;
+      else if (totalBeat >= 240) diff = 3;
+      else if (totalBeat >= 120) diff = 2;
+      else diff = 1;
+      //baseBpm = baseBpm * .9 + targetBpm * .1;
+      //if (Math.abs(targetBpm - baseBpm) < 5) baseBpm = targetBpm;
       tempoBpm = baseBpm + totalBeat * LINEAR_TEMPO;
       Music.autoBpm = tempoBpm;
       tempo = Music.makeTempo(tempoBpm);

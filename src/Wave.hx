@@ -75,21 +75,24 @@ class Wave {
         type: d.type
       });
     }
+    var odir = dir;
     for (i in 0...desc.sub) {
       add(dir, reflect, i);
       dir = cw ? dir.cw : dir.acw;
     }
     spawns.sort((a, b) -> a.at - b.at);
-    return new Wave(spawns, Game.currentBeat, polarity);
+    return new Wave(spawns, odir, Game.currentBeat, polarity);
   }
 
   public var desc:Array<WaveSpawn>;
+  public var mainDir:Dir;
   public var onBeat:Int;
   public var polarity:Int;
   public var pos:Int;
 
-  public function new(desc:Array<WaveSpawn>, onBeat:Int, polarity:Int) {
+  public function new(desc:Array<WaveSpawn>, mainDir:Dir, onBeat:Int, polarity:Int) {
     this.desc = desc;
+    this.mainDir = mainDir;
     this.onBeat = onBeat;
     this.polarity = polarity;
     pos = 0;

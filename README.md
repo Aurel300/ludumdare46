@@ -25,15 +25,6 @@ The player starts with 5 lives and must survive 5(?) minutes (classic) or indefi
 
 ## TODO
 
- - gfx
- - sfx
- - music
- - ui
- - the game
-
- x waves
- . difficulty scaling
- - proc music
- - powerups
- - score/classic timer?
- - classic "levels"?
+ . gfx
+   - particles
+ - leaderboards?!

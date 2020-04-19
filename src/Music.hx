@@ -22,7 +22,7 @@ class Music {
   public static function sampleData(ev:AudioProcessingEvent):Void {
     var outLeft:Float32Array = ev.outputBuffer.getChannelData(0);
     var outRight:Float32Array = ev.outputBuffer.getChannelData(1);
-    var volume = .2;
+    var volume = .45;
     for (i in 0...SAMPLES) {
       var val = 0.;
       var valL = 0.;
@@ -87,6 +87,127 @@ class Music {
     }
   };
   static var patGame:Pattern = (sbeat, ipos) -> {
+    var beat = (sbeat >> 1) % 48;
+    var sbeat = sbeat % 768;
+    if (sbeat >= 8 && (sbeat >> 3) % 7 == 0) switch (sbeat % 8) {
+      case 0: insKickA.trigger(ipos, 0.5, 0);
+      case 1: insKickB.trigger(ipos, 0.6, 0);
+      case 2: insSnare.trigger(ipos, 0.9, 0);
+      case 3: insKickA.trigger(ipos, 0.7, 0);
+      case 4: insKickB.trigger(ipos, 0.9, 0);
+      case _:
+    } else switch (sbeat % 8) {
+      case 0: insKickA.trigger(ipos, 1.0, 0);
+      case 2: insSnare.trigger(ipos, 0.9, 0);
+      case 4: insKickA.trigger(ipos, 0.9, 0);
+      case 6: insKickB.trigger(ipos, 0.7, 0);
+      case _:
+    }
+    if ((sbeat >> 6) % 12 >= 8) {
+      switch ((sbeat % 64 + 2) % 3) {
+        case 1: insTriA.trigger(ipos, 0.8, 0);
+        case 0: insTriA.vol = 0.05;
+        case _:
+      }
+      var T = [
+        0, 3, 6, 5, N,
+        0, 3, 6, 5, N,
+        0, 3, 6, 5, 3,
+        0, 3, 6, 5, N,
+        0, 3, 6, 5, N,
+      ][Std.int((sbeat % 64) / 3)];
+      if (T == 3 && sbeat % 64 == 0) insLeadA.trigger(ipos, 0.7, T + ((sbeat % 64) >> 3));
+      if (T != -1) insTriA.pitchW(T + 12);
+    } else if (sbeat >= 8 && (sbeat >> 3) % 35 != 0) {
+      switch [(sbeat + 2) % 16, ((sbeat + 2) >> 4) % 4] {
+        case [ 0, 0]: insBassA.trigger(ipos, 0.8, 0); insBassB.trigger(ipos, 0.6, 3);
+        case [ 7, 0]: insBassA.trigger(ipos, 0.8, 3); insBassB.trigger(ipos, 0.6, 6);
+        case [ 9, 0]: insBassA.trigger(ipos, 0.8, 2); insBassB.trigger(ipos, 0.6, 5);
+        case [12, 0]: insBassA.vol = 0.05; insBassB.vol = 0.03;
+        case [ 0, 1]: insBassA.trigger(ipos, 0.8, 0); insBassB.trigger(ipos, 0.6, 3);
+        case [ 7, 1]: insBassA.trigger(ipos, 0.8, 3); insBassB.trigger(ipos, 0.6, 6);
+        case [ 9, 1]: insBassA.trigger(ipos, 0.8, 2); insBassB.trigger(ipos, 0.6, 5);
+        case [12, 1]: insBassA.vol = 0.05; insBassB.vol = 0.03;
+        case [ 0, 2]: insBassA.trigger(ipos, 0.8, 0); insBassB.trigger(ipos, 0.6, 3);
+        case [ 7, 2]: insBassA.trigger(ipos, 0.8, 6); insBassB.trigger(ipos, 0.6, 9);
+        case [ 9, 2]: insBassA.trigger(ipos, 0.8, 2); insBassB.trigger(ipos, 0.6, 5);
+        case [12, 2]: insBassA.vol = 0.05; insBassB.vol = 0.03;
+        case [ 0, 3]: insBassA.trigger(ipos, 0.8, 0); insBassB.trigger(ipos, 0.6, 3);
+        case [ 8, 3]: insBassA.trigger(ipos, 0.8, 3); insBassB.trigger(ipos, 0.6, 6);
+        case [10, 3]: insBassA.trigger(ipos, 0.8, 2); insBassB.trigger(ipos, 0.6, 5);
+        case [12, 3]: insBassA.vol = 0.05; insBassB.vol = 0.03;
+        case _:
+      }
+    }
+  };
+  /*
+  static var patOver:Pattern = (beat, ipos) -> {
+    if (sbeat >= 144) switch (sbeat % 48) {
+      case 3:  insKickB.trigger(ipos, 0.5, 0);
+      case 11: insKickA.trigger(ipos, 0.5, 0);
+      case 39: insKickA.trigger(ipos, 0.5, 0);
+      case 43: insKickB.trigger(ipos, 0.5, 0);
+      case _:
+    }
+    var arpVol = (sbeat >= 384 ? .5 : (sbeat >= 200 ? .9 : (sbeat >= 192 ? .4 : 0)));
+    if (sbeat >= 384) {
+      if (sbeat < 384 + 12) arpVol *= (sbeat - 384) / 12;
+      if (sbeat % 6 == 0) insPadA.trigger(ipos, arpVol * .5, 0);
+      var T = penta[[
+        0, 3, 0, 3, N, 3, 2, 1, N, 5, 2, 4, 1, N, N, 1, N, 4, 4, 2,
+        0, 3, 0, 3, 8, 3, 2, 1, 9, 5, 2, 4, N, 1, 11, 1, 12, N, 4, N,
+        0, 3, 0, 3, N, 3, 2, 1, N, 5, 2, 4, 1, N, N, 1, N, 4, 4, 2,
+        N, 3, 2, 1
+      ][sbeat % 64]];
+      if (T == null) insPadA.vol = arpVol * .02;
+      else insPadA.vol = arpVol * .5;
+      insPadA.pitchW(T);
+    } else if (sbeat >= 288) {
+      switch (beat % 8) {
+        case 0: insPadA.trigger(ipos, arpVol * .2, 0);
+        case 2: insPadA.trigger(ipos, arpVol * .175, 0);
+        case 4: insPadA.trigger(ipos, arpVol * .15, 0);
+        case 6: insPadA.trigger(ipos, arpVol * .175, 0);
+      }
+      var T = 12;
+      if (beat >= 32) T = 16;
+      else if (beat >= 16) T = 12;
+      else T = 15;
+      //T -= Std.int((sbeat - 0) / 12) * 2;
+      // if (sbeat % 16 >= 8) T -= 12;
+      if (T < 0) T = 0;
+      insPadA.pitchW([T+0, T+1, T+3, T+9, T+8, T+3, T+0, T+1, 1+T, 0+T, 3+T, 8+T, 9+T, 3+T, 1+T, 0+T][sbeat % 16]);
+    } else {
+      switch (beat % 8) {
+        case 0: insPadA.trigger(ipos, arpVol * .2, 0);
+        case 2: insPadA.trigger(ipos, arpVol * .175, 0);
+        case 4: insPadA.trigger(ipos, arpVol * .15, 0);
+        case 6: insPadA.trigger(ipos, arpVol * .125, 0);
+      }
+      var T = 0;
+      if (beat >= 32) T = 0;
+      else if (beat >= 16) T = 3;
+      else T = 4;
+      if (sbeat >= 384) T += 12;
+      insPadA.pitchW([T+0, T+1, T+3, T+9, T+8, T+3, T+0, T+1][sbeat % 8]);
+    }
+    if ((sbeat % 48) % 6 == 0) {
+      (sbeat % 12 == 0 ? insSnare : insSnareOpen).trigger(ipos, min(.3, sbeat / 100), 0);
+    }
+    if (sbeat >= 48) switch (sbeat % 48) {
+      case 0:  insBassB.trigger(ipos, 0.7, 0); insBassB.fx(2); insBassB.pan = .2;
+      case 4:  insBassB.trigger(ipos, 0.7, 0); insBassB.fx(2); insBassB.pan = .3;
+      case 12: insBassB.trigger(ipos, 0.7, 3); insBassB.fx(2); insBassB.pan = .4;
+      case 16: insBassB.trigger(ipos, 0.7, 3); insBassB.fx(2); insBassB.pan = .5;
+      case 24: insBassB.trigger(ipos, 0.7, 0); insBassB.fx(1); insBassB.pan = .6;
+      case 28: insBassB.trigger(ipos, 0.7, 0); insBassB.fx(2); insBassB.pan = .7;
+      case 40: insBassB.trigger(ipos, 0.7, 3); insBassB.fx(2); insBassB.pan = .5;
+      case 44: insBassB.trigger(ipos, 0.7, 3); insBassB.fx(1); insBassB.pan = .3;
+      case _:
+    }
+  };
+  */
+  static var patOver:Pattern = (sbeat, ipos) -> {
     var beat = (sbeat >> 1) % 48;
     var sbeat = sbeat % 768;
     if (sbeat >= 0) switch (sbeat % 48) {
@@ -209,6 +330,9 @@ class Music {
       case PatGame:
         activePattern = patGame;
         autoBpm = 480.;
+      case PatOver:
+        activePattern = patOver;
+        autoBpm = 400.;
     }
   }
 
@@ -219,7 +343,8 @@ class Music {
   public static function play():Void {
     if (playing)
       return;
-    activePattern = patIntro;
+    if (activePattern == null)
+      activePattern = patIntro;
     playing = true;
     outputContext = new AudioContext();
     outputOscillator = outputContext.createOscillator();
@@ -237,7 +362,6 @@ class Music {
       outputOscillator.disconnect();
       outputNode.disconnect();
     }
-    // time = 0;
     playing = false;
   }
 
@@ -248,6 +372,7 @@ class Music {
     initDrums();
     initPWM();
     initPad();
+    activePattern = patIntro;
   }
 
   static var bufNoise:Array<Float32Array>;
@@ -331,12 +456,14 @@ class Music {
     var bufsBassA = [];
     var bufsTriA = [];
     var bufsLeadA = [];
-    for (bend in [0, -1, 1]) for (bfreq in scale(55, 13)) {
+    var wlensMi = [];
+    for (bend in [0, -1, 1]) for (bfreq in scale(55, 26)) {
       var bufBassA = new Float32Array(klen);
       var bufTriA = new Float32Array(klen);
       var bufLeadA = new Float32Array(klen);
       var lfoFreq = 10.;
       var lfoWlen = (44100 / lfoFreq);
+      if (bend == 0) wlensMi.push(44100 / (bfreq * 4));
       for (i in SAMPLES...klen) {
         var phase = i - SAMPLES;
         var freq = bfreq * (1 + max(-1, -(1500 / (phase + 1500))) * bend * .45);
@@ -357,11 +484,12 @@ class Music {
       bufsTriA.push(bufTriA);
       bufsLeadA.push(bufLeadA);
     }
-    insBassA = new Poly(bufsBassA, 13);
-    insBassB = new Poly(bufsBassA, 13);
-    insBassC = new Poly(bufsBassA, 13);
-    insTriA = new Poly(bufsTriA, 13);
-    insLeadA = new Poly(bufsLeadA, 13);
+    insBassA = new Poly(bufsBassA, 26);
+    insBassB = new Poly(bufsBassA, 26);
+    insBassC = new Poly(bufsBassA, 26);
+    insTriA = new Poly(bufsTriA, 26);
+    insTriA.wlens = wlensMi;
+    insLeadA = new Poly(bufsLeadA, 26);
   }
 
   static var insPadA:Poly;
@@ -441,8 +569,8 @@ class Poly extends Instrument {
     if (note == null) return;
     if (pos >= Music.SAMPLES) {
       pos -= Music.SAMPLES;
-      var rem = (pos % wlens[curNote]) / wlens[curNote];
-      pos = Std.int((Math.round(pos / wlens[note]) + rem) * wlens[note]);
+      var rem = (pos % wlens[curNote % fxc]) / wlens[curNote % fxc];
+      pos = Std.int((Math.round(pos / wlens[note % fxc]) + rem) * wlens[note % fxc]);
       pos += Music.SAMPLES;
     }
     pitch(note);
@@ -457,4 +585,5 @@ typedef Pattern = Int->Int->Void;
 enum MusicId {
   PatIntro;
   PatGame;
+  PatOver;
 }

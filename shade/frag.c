@@ -1,17 +1,19 @@
 precision highp float;
 precision highp int;
 
-// uniform sampler2D uSampler;
+uniform sampler2D uSampler;
 // uniform vec4 uLight;
 
 varying highp vec2 vUV;
 varying highp vec2 vAlpha;
 
 void main(void) {
-  // vec4 col = texture2D(uSampler, vUV);
+  vec4 col = texture2D(uSampler, vUV);
 
-  // if (col.w < 0.5)
-  //   discard;
+  if (col.w < 0.5)
+    discard;
+
+  gl_FragColor = col;
 
   /*
   float alpha = vAlpha.x * col.w;
@@ -53,5 +55,5 @@ void main(void) {
 
   gl_FragColor = (light * col + (1.0 - light) * vec4(50. / 255., 30. / 255., 51. / 255., col.w)) * vec4(1, 1, 1, alpha);
   */
-  gl_FragColor = vec4(vUV.x * 100., vUV.y * 100., 1, 1);
+  //gl_FragColor = vec4(vUV.x * 100., vUV.y * 100., 1, 1);
 }

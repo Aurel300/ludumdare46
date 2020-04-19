@@ -13,24 +13,41 @@ class Render {
   public static var cameraYI:Int;
   public static var shakeAmount:Int;
   public static var surf:Surface;
-  public static var vertexCount = 0;
+  public static var vertexCount:Int;
   public static var bufferPosition:Buffer;
   public static var bufferUV:Buffer;
   public static var bufferAlpha:Buffer;
   //public static var uniformLight:Uniform;
   public static var texW:Int = 512;
   public static var texH:Int = 512;
-  public static var renderCalls = 0;
   public static var screen = Intro;
-
-  // debug
-  public static var debugText:String->Void;
-  public static var debugHp:String->Void;
-  public static var debugBeat:String->Void;
+  public static var texRegions:Map<String, {x:Int, y:Int, w:Int, h: Int}>;
+  // intro
+  public static var introTimer:Int = 0;
+  public static var introTut:Bool = false;
+  // game
+  public static var sweepTX:Int;
+  public static var sweepTY:Int;
+  public static var sweepDir:Dir;
+  public static var sweepTimer:Int;
+  public static var bgH:Array<{x:Float, vx:Float, c:Int, w:Int}>;
+  public static var bgV:Array<{y:Float, vy:Float, c:Int, h:Int}>;
 
   public static function shake(am:Int):Void {
     shakeAmount += am;
     // TODO: limit ?
+  }
+
+  public static function sweep(fx:Int, fy:Int, dir:Dir):Void {
+    sweepTX = fx;
+    sweepTY = fy;
+    sweepDir = dir;
+    switch (dir) {
+      case Up: sweepTY--;
+      case Left: sweepTX--;
+      case _:
+    }
+    sweepTimer = 6;
   }
 
   public static function init(canvas:js.html.CanvasElement):Void {
@@ -47,28 +64,58 @@ class Render {
     });
     Main.aShade.loadSignal.on(asset -> {
       surf.loadProgram(asset.pack["vert.c"].text, asset.pack["frag.c"].text);
+      var tr:haxe.DynamicAccess<Dynamic> = haxe.Json.parse(asset.pack["game.json"].text);
+      texRegions = [ for (k => v in tr) k => v ];
+      function rep(name:String, n:Int, xn:Int, yn:Int, m:Int, xm:Int, ym:Int):Void {
+        var base = texRegions[name];
+        for (j in 0...m) {
+          for (i in 0...n) {
+            texRegions[m < 2 ? '${name}_$i' : '${name}_$i/$j'] = {
+              x: base.x + i * xn * base.w + j * xm * base.w,
+              y: base.y + i * yn * base.h + j * ym * base.h,
+              w: base.w,
+              h: base.h
+            };
+          }
+        }
+      }
+      function off(name:String, rname:String, xo:Int, yo:Int):Void {
+        var base = texRegions[name];
+        texRegions[rname] = {
+          x: base.x + xo,
+          y: base.y + yo,
+          w: base.w,
+          h: base.h
+        };
+      }
+      rep("bullet_L", 4, 0, 1, 1, 0, 0);
+      rep("bullet_U", 4, 1, 0, 1, 0, 0);
+      off("bullet_L_0", "ibullet_L_0", 89, 0);
+      off("bullet_L_1", "ibullet_L_1", 89, 0);
+      off("bullet_L_2", "ibullet_L_2", 89, 0);
+      off("bullet_L_3", "ibullet_L_3", 89, 0);
+      off("bullet_LS1", "ibullet_LS1", 89, 0);
+      off("bullet_LS2", "ibullet_LS2", 89, 0);
+      off("bullet_LS3", "ibullet_LS3", 89, 0);
+      off("bullet_U_0", "ibullet_U_0", 60, 0);
+      off("bullet_U_1", "ibullet_U_1", 60, 0);
+      off("bullet_U_2", "ibullet_U_2", 60, 0);
+      off("bullet_U_3", "ibullet_U_3", 60, 0);
+      off("bullet_US1", "ibullet_US1", 60, 0);
+      off("bullet_US2", "ibullet_US2", 60, 0);
+      off("bullet_US3", "ibullet_US3", 60, 0);
     });
-    /*
     Main.aPng.loadSignal.on(asset -> {
-      //trace("png loaded");
       surf.updateTexture(0, asset.pack["game.png"].image);
     });
-    */
     Glewb.rate(delta -> {
-      //if (Main.aPng.loading)
-      //  return;
-      surf.render(0xCCCCCC, () -> {
+      if (Main.aPng.loading || Main.aShade.loading || Main.aWav.loading || texRegions == null)
+        return;
+      surf.render(0x5692b5, () -> {
         vertexCount = 0;
-        renderCalls = 1;
-        // Text.baseShake++;
-        // Text.shakePhase = 0;
         tick(delta);
-        // debugRender('$renderCalls');
       });
     });
-    debugText = Debug.text("Text");
-    debugHp = Debug.text("HP");
-    debugBeat = Debug.text("Beat");
 
       /*
     Main.input.mouse.up.on(e -> {
@@ -80,33 +127,125 @@ class Render {
         Music.enable(!Music.enabled);
     });
       */
-    input.keyboard.up.on(function (key):Void {
-      switch [screen, key] {
-        case [Intro | GameOver, Space]:
-          shakeAmount = 0;
-          cameraX = cameraTX = WH;
-          cameraY = cameraTY = HH;
-          screen = GamePlaying;
-          Game.start(Classic(3, 3, 0));
-        case _:
+    input.keyboard.up.on(key -> if (screen == GameOver && key == KeyR) restart());
+    input.mouse.move.on(e -> {
+      msx = Std.int(e.x) >> 1;
+      msy = Std.int(e.y) >> 1;
+    });
+    input.mouse.up.on(e -> {
+      if (screen.match(Intro | GameOver) && msAction != null) {
+        msAction();
+        msAction = null;
       }
     });
   }
 
+  static function restart():Void {
+    shakeAmount = 0;
+    cameraX = cameraTX = WH;
+    cameraY = cameraTY = HH;
+    sweepTimer = 0;
+    bgH = [];
+    bgV = [];
+    screen = GamePlaying;
+    Game.start(Classic(3, 3, 0));
+  }
+
+  static var msx:Int = 0;
+  static var msy:Int = 0;
+  static var msAction:Void->Void;
+  static var visPhase = 0;
   public static function tick(delta:Float):Void {
+    visPhase++;
     Music.autoTick(delta);
+    var pal = texRegions["pal"];
     switch (screen) {
       case Intro:
-        Music.selectMusic(PatGame);
-        debugText("space to start");
+        Music.selectMusic(PatIntro);
+        var hx = Math.cos(introTimer / 29.) * 20.;
+        var hy = Math.sin(introTimer / 70.) * 15.;
+        var tx = 0.;
+        if (introTimer < 80) hy -= (Math.pow((80 - introTimer) / 80, 2)) * H;
+        if (introTimer < 110) tx -= (Math.pow((110 - introTimer) / 110, 2)) * W;
+        drawRM(Std.int(WH + hx), Std.int(HH - 20 + hy), "title");
+        var msel = Text.line(introTut ? (HH - 2) : (HH + 10), msy);
+        Text.render(Std.int(8 + tx), introTut ? (HH - 2) : (HH + 10), introTut ? '$$bHow to play $$b
+
+Move around with ` @ $$$$ #.
+Hold $$bspace$$b to drag $$b$$sIT$$s$$b with you.
+Your stamina drains when you hold $$b$$sIT$$s$$b!
+Purple bullets hurt $$byou$$b, blue bullets hurt $$b$$sIT$$s$$b.
+Keep $$b$$sIT$$s$$b (and yourself) alive. Good luck!
+
+${msel == 8 ? ">>" : ">"} Main menu' : '$$bJarHeads$$b
+A game by $$bAurel B%l&$$b <thenet.sk>
+Made for Ludum Dare 46
+${msel == 3 ? ">>" : ">"} How to play
+${msel == 4 ? ">>" : ">"} New game
+${msel == 5 ? ">>" : ">"} Music: ${Music.playing ? "on" : "off"}
+${msel == 6 ? ">>" : ">"} Sound: ${Sfx.enabled ? "on" : "off"}
+${msel == 7 ? ">>" : ">"} More games');
+        msAction = tx > -5. ? (introTut ? (switch (msel) {
+          case 8: () -> introTut = false;
+          case _: null;
+        }) : (switch (msel) {
+          case 3: () -> introTut = true;
+          case 4: () -> restart();
+          case 5: () ->
+            if (Music.playing) Music.stop();
+            else Music.play();
+          case 6: () -> Sfx.enabled = !Sfx.enabled;
+          case 7: () -> js.Browser.window.open("https://www.thenet.sk/");
+          case _: null;
+        })) : null;
+        introTimer++;
+      case GameOver:
+        Music.selectMusic(PatOver);
+        var msel = Text.line(HH + 22, msy);
+        Text.render(8, HH + 22, '$$bGame over!$$b
+Final score: $$b${Game.score}$$b
+
+${msel == 3 ? ">>" : ">"} Restart game
+   (or press $$bR$$b to restart)
+${msel == 5 ? ">>" : ">"} Submit score
+${msel == 6 ? ">>" : ">"} Main menu');
+        msAction = (switch (msel) {
+          case 3: () -> restart();
+          case 5: null; // () -> ...
+          case 6: () -> { introTimer = 0; screen = Intro; };
+          case _: null;
+        });
       case GamePlaying:
         Music.selectMusic(PatGame);
-        debugText("game");
-        debugBeat('${Game.totalBeat} ${Game.diff} ${Game.tempoBpm}');
         // logic
         Game.tick(delta);
-        // debug
-        debugHp('${Game.playerHp}' + (Game.playerIframes > 0 ? " (inv)" : ""));
+        // make bg
+        if (Game.justBeat && Game.waveUp != null) {
+          var size = Game.currentBeat == 0 ? 70 : 30;
+          var c = 7 - Game.currentBeat;
+          switch (Game.waveUp.mainDir) {
+            case Up:
+              bgV.push({y: H, vy: -0.002, c: c, h: size});
+            case Right:
+              bgH.push({x: -size, vx: 0.002, c: c, w: size});
+            case Down:
+              bgV.push({y: -size, vy: 0.002, c: c, h: size});
+            case Left:
+              bgH.push({x: W, vx: -0.002, c: c, w: size});
+          }
+        }
+        bgH = [ for (b in bgH) {
+          if (b.x < -b.w || b.x > W) continue;
+          drawFree(Std.int(b.x), 0, b.w, H, pal.x + 4, pal.y + 1 + b.c * 3, 1, 1);
+          b.x += b.vx * Game.tempoBpm * delta;
+          b;
+        } ];
+        bgV = [ for (b in bgV) {
+          if (b.y < -b.h || b.y > H) continue;
+          drawFree(0, Std.int(b.y), W, b.h, pal.x + 4, pal.y + 1 + b.c * 3, 1, 1);
+          b.y += b.vy * Game.tempoBpm * delta;
+          b;
+        } ];
         // render
         cameraTX = WH - (Game.playerX * 20 - (Game.arena.w - 1) * 10);
         cameraTY = HH - (Game.playerY * 16 - (Game.arena.h - 1) * 8);
@@ -116,7 +255,7 @@ class Render {
         cameraYI = Math.round(cameraY + rng.rangeF(-shakeAmount, shakeAmount) * .4);
         if (shakeAmount > 0) shakeAmount--;
         var iframePhase = (Game.playerIframes % 300 < 150);
-        var sframePhase = (!Game.playerSframes || Game.playerStamina % 10 < 5);
+        var sframePhase = (!Game.playerSframes || visPhase % 30 < 15);
         // coordinates
         var tileW = 70;
         var tileH = 50;
@@ -132,210 +271,199 @@ class Render {
         for (y in 0...Game.arena.hm) for (x in 0...Game.arena.wm) {
           var tile = Game.arena.tiles[ti++];
           if (!tile.inMargin) {
-            drawC(arenaX + x * tileWP, arenaY + y * tileHP, 0, 0, tileW, tileH);
+            var toy = 0;
+            if (Game.playerX == x - 1 && Game.playerY == y - 1) toy = -2;
+            //else if (Game.itX == x - 1 && Game.itY == y - 1) toy = -1;
+            drawRC(arenaX + x * tileWP, arenaY + toy + y * tileHP, "tile");
           }
         }
         // draw tile figs
         ti = 0;
+        var plOffY = texRegions["player_off"].h;
         for (y in 0...Game.arena.hm) for (x in 0...Game.arena.wm) {
+          var tx = arenaX + x * tileWP;
+          var ty = arenaY + y * tileHP;
           var tcX = arenaX + x * tileWP + tileWH;
           var tcY = arenaY + y * tileHP + tileHH;
           var tile = Game.arena.tiles[ti++];
           for (f in tile.figs.concat(tile.figsNext)) {
             switch (f) {
               case Player(_) if (iframePhase):
-                drawCM(tcX, tcY, 1, 0, 10, 15);
+                if (Game.playerX == Game.itX && Game.playerY == Game.itY)
+                  drawRC(tx, ty - plOffY, Game.itHeld ? "pair_up" : "pair_down");
+                else
+                  drawRC(tx, ty - plOffY, "player_lone");
               case It if (iframePhase):
-                drawCM(tcX, tcY + (Game.itHeld ? -10 : 10), 0, 1, 20, 10);
-              case Barrage(bt, Up, beat):
-                var pl = bt.match(HurtsPlayer | HurtsBoth);
-                var pi = bt.match(HurtsIt | HurtsBoth);
-                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
-                drawCM(tcX, tcY + tileHH + (off >> 1), pl ? 1 : 0, pi ? 1 : 0, tileW - 10, 10 + off);
-              case Barrage(bt, Down, beat):
-                var pl = bt.match(HurtsPlayer | HurtsBoth);
-                var pi = bt.match(HurtsIt | HurtsBoth);
-                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileH) : 0;
-                drawCM(tcX, tcY - tileHH - (off >> 1), pl ? 1 : 0, pi ? 1 : 0, tileW - 10, 10 + off);
-              case Barrage(bt, Left, beat):
-                var pl = bt.match(HurtsPlayer | HurtsBoth);
-                var pi = bt.match(HurtsIt | HurtsBoth);
-                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
-                drawCM(tcX + tileWH + (off >> 1), tcY, pl ? 1 : 0, pi ? 1 : 0, 10 + off, tileH - 10);
-              case Barrage(bt, Right, beat):
-                var pl = bt.match(HurtsPlayer | HurtsBoth);
-                var pi = bt.match(HurtsIt | HurtsBoth);
-                var off = Game.currentBeat == beat ? Std.int((1 - Game.tempoCtr / Game.tempo) * tileW) : 0;
-                drawCM(tcX - tileWH - (off >> 1), tcY, pl ? 1 : 0, pi ? 1 : 0, 10 + off, tileH - 10);
+                if (Game.playerX == Game.itX && Game.playerY == Game.itY) continue;
+                drawRC(tx, ty - plOffY, "it_lone");
+              case Barrage(t, Up, beat):
+                if (beat == Game.currentBeat) {
+                  var len = Std.int((1 - Game.tempoCtr / Game.tempo) * 50);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    var r = texRegions['${prefix}bullet_US2'];
+                    drawRC(tx + 3 + i * 13, ty + tileHP - 13, '${prefix}bullet_US1');
+                    draw(tx + 3 + i * 13 + cameraXI, ty + tileHP - 13 + 8 + cameraYI, r.x, r.y, r.w, len);
+                    drawRC(tx + 3 + i * 13, ty + tileHP - 13 + 8 + len, '${prefix}bullet_US3');
+                  }
+                } else {
+                  var bp = 0;
+                  var toy = 0;
+                  if (beat == (Game.currentBeat + 1) % 4 || beat == (Game.currentBeat + 2) % 4)
+                    toy += 2;
+                  if (beat == (Game.currentBeat + 1) % 4 && Game.tempoCtr + 2000/60. >= Game.tempo)
+                    bp = 3;
+                  else if (beat == (Game.currentBeat + 1) % 4)
+                    bp = (visPhase % 10 < 5 ? 1 : 2);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    drawRC(tx + 3 + i * 13, ty - 13 + toy, '${prefix}bullet_U_$bp');
+                  }
+                }
+              case Barrage(t, Down, beat):
+                if (beat == Game.currentBeat) {
+                  var len = Std.int((1 - Game.tempoCtr / Game.tempo) * 50);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    var r = texRegions['${prefix}bullet_US2'];
+                    drawRC(tx + 3 + i * 13, ty - tileHP - 13 + 61, '${prefix}bullet_US1', false, true);
+                    draw(tx + 3 + i * 13 + cameraXI, ty - tileHP - 13 + 11 + (50 - len) + cameraYI, r.x, r.y, r.w, len, false, true);
+                    drawRC(tx + 3 + i * 13, ty - tileHP - 13 + (50 - len), '${prefix}bullet_US3', false, true);
+                  }
+                } else {
+                  var bp = 0;
+                  var toy = 0;
+                  if (beat == (Game.currentBeat + 1) % 4 || beat == (Game.currentBeat + 2) % 4)
+                    toy -= 2;
+                  if (beat == (Game.currentBeat + 1) % 4 && Game.tempoCtr + 2000/60. >= Game.tempo)
+                    bp = 3;
+                  else if (beat == (Game.currentBeat + 1) % 4)
+                    bp = (visPhase % 10 < 5 ? 1 : 2);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    drawRC(tx + 3 + i * 13, ty - 13 + toy, '${prefix}bullet_U_$bp', false, true);
+                  }
+                }
+              case Barrage(t, Left, beat):
+                if (beat == Game.currentBeat) {
+                  var len = Std.int((1 - Game.tempoCtr / Game.tempo) * 70);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    var r = texRegions['${prefix}bullet_LS2'];
+                    drawRC(tx + tileWP - 11, ty - 4 + i * 8, '${prefix}bullet_LS1');
+                    draw(tx + tileWP + 8 - 11 + cameraXI, ty - 4 + i * 8 + cameraYI, r.x, r.y, len, r.h);
+                    drawRC(tx + tileWP + 8 + len - 11, ty - 4 + i * 8, '${prefix}bullet_LS3');
+                  }
+                } else {
+                  var bp = 0;
+                  var tox = 0;
+                  if (beat == (Game.currentBeat + 1) % 4 || beat == (Game.currentBeat + 2) % 4)
+                    tox += 2;
+                  if (beat == (Game.currentBeat + 1) % 4 && Game.tempoCtr + 2000/60. >= Game.tempo)
+                    bp = 3;
+                  else if (beat == (Game.currentBeat + 1) % 4)
+                    bp = (visPhase % 10 < 5 ? 1 : 2);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    drawRC(tx + tox - 11, ty - 4 + i * 8, '${prefix}bullet_L_$bp');
+                  }
+                }
+              case Barrage(t, Right, beat):
+                if (beat == Game.currentBeat) {
+                  var len = Std.int((1 - Game.tempoCtr / Game.tempo) * 70);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    var r = texRegions['${prefix}bullet_LS2'];
+                    drawRC(tx - tileWP - 8 + 81, ty - 4 + i * 8, '${prefix}bullet_LS1', true);
+                    draw(tx - tileWP - 8 + 11 + cameraXI + (70 - len), ty - 4 + i * 8 + cameraYI, r.x, r.y, len, r.h, true);
+                    drawRC(tx - tileWP - 8 + (70 - len), ty - 4 + i * 8, '${prefix}bullet_LS3', true);
+                  }
+                } else {
+                  var bp = 0;
+                  var tox = 0;
+                  if (beat == (Game.currentBeat + 1) % 4 || beat == (Game.currentBeat + 2) % 4)
+                    tox -= 2;
+                  if (beat == (Game.currentBeat + 1) % 4 && Game.tempoCtr + 2000/60. >= Game.tempo)
+                    bp = 3;
+                  else if (beat == (Game.currentBeat + 1) % 4)
+                    bp = (visPhase % 10 < 5 ? 1 : 2);
+                  for (i in 0...5) {
+                    var prefix = (t == HurtsPlayer ? "" : (t == HurtsIt ? "i" : t == HurtsBoth && (i % 2) == (visPhase >> 3) % 2 ? "i" : ""));
+                    drawRC(tx + tox - 8, ty - 4 + i * 8, '${prefix}bullet_L_$bp', true);
+                  }
+                }
               case _:
             }
           }
         }
+        // player sweeps
+        if (sweepTimer > 0) {
+          var tx = arenaX + (sweepTX + 1) * tileWP;
+          var ty = arenaY + (sweepTY + 1) * tileHP;
+          var st = sweepTimer >= 3 ? 1 : 2;
+          switch (sweepDir) {
+            case Up: drawRC(tx, ty - plOffY, 'sweep_U$st');
+            case Right: drawRC(tx, ty - plOffY, 'sweep_R$st');
+            case Down: drawRC(tx, ty - plOffY, 'sweep_D$st');
+            case Left: drawRC(tx, ty - plOffY, 'sweep_L$st');
+            case _:
+          }
+          sweepTimer--;
+        }
         // ui
-        draw(5, 7, 0, 0, 200, 5);
-        if (iframePhase)
-          draw(5, 5, 1, 0, Std.int((Game.playerHp / Game.MAX_HP) * 200), 5);
-        draw(5, 17, 0, 0, 200, 5);
-        if (sframePhase)
-          draw(5, 15, 1, 1, Std.int((Game.playerStamina / Game.MAX_STAMINA) * 200), 5);
-      case GameOver:
-        debugText("game over, space to restart");
-    }
-    /*
-    if (player == null || player.room == null)
-      return;
-    for (actor in player.room.actors)
-      actor.tick(delta);
-    Music.tick(
-      player.room.id == 0 ? -1 : ((player.hp > 3 || player.hp == 0) ? 0 : (player.hp > 1 ? 1 : 2)),
-      player.room.id == 0 ? -1 : (player.room.enemies > 0 ? 1 : 0),
-      player.room.melody
-    );
-    cameraX = cameraX * .95 + (player.room.x * Tile.TW + (player.x:Float) - WH) * .05;
-    cameraVX = cameraVX * .993 + (player.direction ? 40 : -40) * .007;
-    cameraY = cameraY * .95 + (player.room.y * Tile.TH + (player.y:Float) - HH) * .05;
-    lightX = lightX * .95 + (player.x.round() + player.room.x * Tile.TW - (cameraX + cameraVX)) * .05;
-    lightY = lightY * .95 + (player.y.round() + player.room.y * Tile.TH - (cameraY)) * .05;
-    uniformLight.dataF32[0] = lightX;
-    uniformLight.dataF32[1] = lightY;
-    uniformLight.dataF32[2] = lightRadius + Math.sin(lightPhase / 100.0) * 0.2 + Math.random() * 0.01;
-    uniformLight.dataF32[3] = 0.7 * lightRadius + Math.sin(130 + lightPhase / 140.0) * 0.2 + Math.random() * 0.01;
-    lightPhase++;
-    lightRadius = 0.4 + (player.hp / player.skills.maxHp) * 0.4;
-    var rendered = 0;
-    var shX = 0.0;
-    var shY = 0.0;
-    if (shakeAmount > 0) {
-      var min = shakeAmount / 25;
-      if (min < 1) min = 1;
-      shX = Particle.ch.float(min) * Particle.ch.float(min) * Particle.ch.sign();
-      shY = Particle.ch.float(min) * Particle.ch.float(min) * Particle.ch.sign();
-      if (shakeAmount > 60)
-        shakeAmount -= 3;
-      else if (shakeAmount > 30)
-        shakeAmount -= 2;
-      else
-        shakeAmount--;
-    }
-    function renderRoom(room:Room):Void {
-      room.tick();
-      room.enemies = 0;
-      room.alpha = room.alpha * .93 + (room == player.room ? 1.0 : .3) * .07;
-      var ox:Int = room.x * Tile.TW - Math.round(cameraX + cameraVX + shX);
-      var oy:Int = room.y * Tile.TH - Math.round(cameraY + shY);
-      if (ox < -room.w * Tile.TW || ox >= W || oy < -room.h * Tile.TH || oy >= H)
-        return;
-      rendered++;
-      for (layer in -2...3) {
-        var i = -1;
-        for (y in 0...room.h) for (x in 0...room.w) {
-          i++;
-          if (room.tiles[i].edge == Outside)
-            continue;
-          for (vis in room.tiles[i].vis[layer + 2]) {
-            //var selected = (layer == 0 && room == player.room && x == player.punchX && y == player.punchY && room.tiles[i].edge == Edge);
-            draw(
-              ox + x * Tile.TW + vis.tox,
-              oy + y * Tile.TH + vis.toy,
-              vis.tx, vis.ty, vis.tw, vis.th,
-              1.0, room.alpha, vis.tflip
-            );
-            if (vis.text != null)
-              Text.render(ox + x * Tile.TW + vis.tox, oy + y * Tile.TH + vis.toy, vis.text, .2, 1.3 + room.alpha);
+        drawR(0, 0, "ui_top");
+        if (iframePhase) {
+          for (i in 0...Game.playerHp) {
+            drawR(35 + i * 36, 0, "ui_hp_piece");
           }
         }
-        if (layer == 0) {
-          for (actor in room.actors) {
-            if (actor == player)
-              continue;
-            if (actor.type == Enemy)
-              room.enemies++;
-            draw(
-              ox + actor.x.round() + actor.tox,
-              oy + actor.y.round() + actor.toy,
-              actor.baseTx + actor.tx,
-              actor.baseTy + actor.ty,
-              actor.tw, actor.th, actor.alpha, room.alpha + actor.glow, actor.tflip
-            );
-          }
-          if (room == player.room)
-            draw(
-              ox + player.x.round() + player.tox,
-              oy + player.y.round() + player.toy,
-              player.baseTx + player.tx,
-              player.baseTy + player.ty,
-              player.tw, player.th, player.alpha, room.alpha + player.glow, player.tflip
-            );
-          room.particles = [ for (p in room.particles) {
-            draw(
-              ox + p.x.round(),
-              oy + p.y.round(),
-              p.tx + ((p.frameOff + Std.int(p.phase / p.xpp)) % p.frameMod) * 16, p.ty,
-              16, 16, p.dalpha, room.alpha + p.glow, p.tflip
-            );
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vx += p.ax;
-            p.vy += p.ay;
-            p.dalpha += p.dalphaV;
-            p.phase++;
-            if (p.phase >= p.frames * p.xpp || p.dalpha < 0)
-              continue;
-            p;
-          } ];
+        if (sframePhase) {
+          var hlen = Std.int((Game.playerStamina / Game.MAX_STAMINA) * 186);
+          var r = texRegions["ui_hold1"];
+          draw(26, 15, r.x, r.y, hlen, r.h);
+          drawR(26 + hlen, 15, "ui_hold2");
         }
-      }
+        var scoreT = '$$b${Game.score}';
+        var scoreW = Text.width(scoreT);
+        Text.render(W - 8 - scoreW, 4, scoreT);
+        Text.render(8, H - 38, "$bBPM");
+        Text.renderDigits(8, H - 28, Game.tempoBpm);
     }
-    for (room in Room.map) {
-      if (room == player.room)
-        continue;
-      renderRoom(room);
-    }
-    renderRoom(player.room);
-
-    for (i in 0...player.skills.maxHp) {
-      draw(
-        3 + i * 12,
-        3 - (i == (lightPhase >> 3) % Std.int(5 + (player.hp / player.skills.maxHp) * 80) ? 2 : 0),
-        224 + (player.hp > i ? 16 : 0), 96,
-        16, 16, 0.9, -1, false
-      );
-    }
-    Text.render(player.skills.maxHp * 12 + 10, 5, 'score: $$b${Game.score}$$b $$s${Game.difficulty == 0 ? "" : 'x${(2 + Game.difficulty) >> 1}.${Game.difficulty % 2 == 0 ? "0" : "5"}'}$$s', .4);
-    if (toasts.length > 0) {
-      var cur = toasts[0];
-      //trace(cur);
-      Text.render(WH - (Text.width(cur.text) >> 1), Math.round(cur.y), cur.text, .9);
-      cur.y = cur.y * .95 + (cur.ph < 300 ? H - 16 : H + 4) * .05;
-      cur.ph++;
-      if (cur.ph > 400)
-        toasts.shift();
-    }
-    draw(
-      W - 3 - 32, 3,
-      320, 264 + (Sfx.enabled ? 0 : 16),
-      16, 16, 0.5, -1, false
-    );
-    draw(
-      W - 3 - 16, 3,
-      336, 264 + (Music.enabled ? 0 : 16),
-      16, 16, 0.5, -1, false
-    );
-
-    debugRooms('${rendered}');
-    */
   }
 
   // with camera
-  inline static function drawC(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
-    draw(x + cameraXI, y + cameraYI, tx, ty, tw, th, alpha, dalpha, flip);
+  inline static function drawC(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, /*?alpha:Float = 1.0, ?dalpha:Float = 1.0, */?flip:Bool = false):Void {
+    draw(x + cameraXI, y + cameraYI, tx, ty, tw, th, /*alpha, dalpha, */flip);
   }
   // with camera, centred
-  inline static function drawCM(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
-    draw(x + cameraXI - (tw >> 1), y + cameraYI - (th >> 1), tx, ty, tw, th, alpha, dalpha, flip);
+  inline static function drawCM(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, /*?alpha:Float = 1.0, ?dalpha:Float = 1.0, */?flip:Bool = false):Void {
+    draw(x + cameraXI - (tw >> 1), y + cameraYI - (th >> 1), tx, ty, tw, th, /*alpha, dalpha, */flip);
   }
 
-  static function draw(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, ?alpha:Float = 1.0, ?dalpha:Float = 1.0, ?flip:Bool = false):Void {
+  static function drawR(x:Int, y:Int, n:String, ?flip:Bool = false, ?vflip:Bool = false):Void {
+    if (!texRegions.exists(n)) {
+      trace('no such region: $n');
+      return;
+    }
+    var r = texRegions[n];
+    draw(x, y, r.x, r.y, r.w, r.h, flip, vflip);
+  }
+  inline static function drawRC(x:Int, y:Int, n:String, ?flip:Bool = false, ?vflip:Bool = false):Void {
+    drawR(x + cameraXI, y + cameraYI, n, flip, vflip);
+  }
+  static function drawRM(x:Int, y:Int, n:String):Void {
+    if (!texRegions.exists(n)) {
+      trace('no such region: $n');
+      return;
+    }
+    var r = texRegions[n];
+    draw(x - (r.w >> 1), y - (r.h >> 1), r.x, r.y, r.w, r.h);
+  }
+  inline static function drawRCM(x:Int, y:Int, n:String):Void {
+    drawRM(x + cameraXI, y + cameraYI, n);
+  }
+
+  public static function draw(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, /*?alpha:Float = 1.0, ?dalpha:Float = 1.0, */?flip:Bool = false, ?vflip:Bool = false):Void {
     surf.indexBuffer.writeUI16(vertexCount);
     surf.indexBuffer.writeUI16(vertexCount + 1);
     surf.indexBuffer.writeUI16(vertexCount + 2);
@@ -345,8 +473,8 @@ class Render {
 
     var gx1:Float = ((flip ? x + tw : x) - WH) / WH;
     var gx2:Float = ((flip ? x : x + tw) - WH) / WH;
-    var gy1:Float = (H - y - HH) / HH;
-    var gy2:Float = ((H - y - th) - HH) / HH;
+    var gy1:Float = (H - (vflip ? y + th : y) - HH) / HH;
+    var gy2:Float = ((H - (vflip ? y : y + th)) - HH) / HH;
 
     bufferPosition.writeF32(gx1);
     bufferPosition.writeF32(gy1);
@@ -366,14 +494,6 @@ class Render {
     var gty1 = (ty) / texH;
     var gty2 = (ty + th) / texH;
 
-    bufferUV.writeF32(tx);
-    bufferUV.writeF32(ty);
-    bufferUV.writeF32(tx);
-    bufferUV.writeF32(ty);
-    bufferUV.writeF32(tx);
-    bufferUV.writeF32(ty);
-    bufferUV.writeF32(tx);
-    bufferUV.writeF32(ty);/*
     bufferUV.writeF32(gtx1);
     bufferUV.writeF32(gty1);
     bufferUV.writeF32(gtx2);
@@ -381,23 +501,59 @@ class Render {
     bufferUV.writeF32(gtx1);
     bufferUV.writeF32(gty2);
     bufferUV.writeF32(gtx2);
-    bufferUV.writeF32(gty2);*/
-
-    bufferAlpha.writeF32(alpha);
-    bufferAlpha.writeF32(dalpha);
-    bufferAlpha.writeF32(alpha);
-    bufferAlpha.writeF32(dalpha);
-    bufferAlpha.writeF32(alpha);
-    bufferAlpha.writeF32(dalpha);
-    bufferAlpha.writeF32(alpha);
-    bufferAlpha.writeF32(dalpha);
+    bufferUV.writeF32(gty2);
 
     vertexCount += 4;
-
     if (vertexCount > 400) {
       surf.renderFlush();
       vertexCount = 0;
-      renderCalls++;
+    }
+  }
+
+  public static function drawFree(x:Int, y:Int, w:Int, h:Int, tx:Int, ty:Int, tw:Int, th:Int):Void {
+    surf.indexBuffer.writeUI16(vertexCount);
+    surf.indexBuffer.writeUI16(vertexCount + 1);
+    surf.indexBuffer.writeUI16(vertexCount + 2);
+    surf.indexBuffer.writeUI16(vertexCount + 1);
+    surf.indexBuffer.writeUI16(vertexCount + 3);
+    surf.indexBuffer.writeUI16(vertexCount + 2);
+
+    var gx1:Float = ((x + w) - WH) / WH;
+    var gx2:Float = (x - WH) / WH;
+    var gy1:Float = (H - y - HH) / HH;
+    var gy2:Float = ((H - (y + h)) - HH) / HH;
+
+    bufferPosition.writeF32(gx1);
+    bufferPosition.writeF32(gy1);
+    bufferPosition.writeF32(0);
+    bufferPosition.writeF32(gx2);
+    bufferPosition.writeF32(gy1);
+    bufferPosition.writeF32(0);
+    bufferPosition.writeF32(gx1);
+    bufferPosition.writeF32(gy2);
+    bufferPosition.writeF32(0);
+    bufferPosition.writeF32(gx2);
+    bufferPosition.writeF32(gy2);
+    bufferPosition.writeF32(0);
+
+    var gtx1 = (tx) / texW;
+    var gtx2 = (tx + tw) / texW;
+    var gty1 = (ty) / texH;
+    var gty2 = (ty + th) / texH;
+
+    bufferUV.writeF32(gtx1);
+    bufferUV.writeF32(gty1);
+    bufferUV.writeF32(gtx2);
+    bufferUV.writeF32(gty1);
+    bufferUV.writeF32(gtx1);
+    bufferUV.writeF32(gty2);
+    bufferUV.writeF32(gtx2);
+    bufferUV.writeF32(gty2);
+
+    vertexCount += 4;
+    if (vertexCount > 400) {
+      surf.renderFlush();
+      vertexCount = 0;
     }
   }
 }
