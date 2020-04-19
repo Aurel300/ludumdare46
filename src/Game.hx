@@ -92,12 +92,18 @@ class Game {
     Debug.button("BPM!", () -> totalBeat += 100);
   }
 
-  public static function damage(type:BulletType, x:Int, y:Int):Bool {
+  public static function damage(type:BulletType, x:Int, y:Int, dx:Int, dy:Int):Bool {
+    var dmg = "blue";
     var didHit = (switch (type) {
-      case HurtsPlayer: playerX == x && playerY == y;
+      case HurtsPlayer: dmg = "purple"; playerX == x && playerY == y;
       case HurtsIt: itX == x && itY == y;
       case HurtsBoth: (playerX == x && playerY == y) || (itX == x && itY == y);
     });
+    if (type == HurtsPlayer && !didHit && itX == x && itY == y) {
+      Sfx.play("surf");
+      Render.spawnP("star", x, y, 0, 0);
+      score += 500 * diff * diff;
+    }
     if (didHit && playerIframes == 0) {
       playerHp--;
       playerIframes = IFRAME_LENGTH_MS;
@@ -106,6 +112,9 @@ class Game {
         Sfx.play("death");
         Render.screen = GameOver;
       } else {
+        Render.spawnP("smoke_dark", x, y, dx * 2.2, dy * 1.9);
+        Render.spawnP("smoke_light", x, y, dx * 2.2, dy * 1.9);
+        Render.spawnP('burst_$dmg', x, y, dx * 1.2, dy * .9);
         Sfx.play("hurt");
       }
     }
@@ -128,14 +137,14 @@ class Game {
         facing = ff;
         false;
       case Barrage(t = (HurtsPlayer | HurtsBoth), dir, _) if (dir == popp):
-        !damage(t, playerX, playerY);
+        !damage(t, playerX, playerY, dir.x, dir.y);
       case _: true;
     });
     playerX = nx;
     playerY = ny;
     arena.get(playerX, playerY).filter(f -> switch (f) {
       case Barrage(t = (HurtsPlayer | HurtsBoth), dir, _) if (dir == pdir):
-        !damage(t, playerX, playerY);
+        !damage(t, playerX, playerY, dir.x, dir.y);
       case _: true;
     });
     arena.get(playerX, playerY).push(Player(dx > 0 || (dx >= 0 && facing)));
@@ -143,14 +152,14 @@ class Game {
       arena.get(itX, itY).filter(f -> switch (f) {
         case It: false;
         case Barrage(t = (HurtsIt | HurtsBoth), dir, _) if (dir == popp):
-          !damage(t, itX, itY);
+          !damage(t, itX, itY, dir.x, dir.y);
         case _: true;
       });
       itX = playerX;
       itY = playerY;
       arena.get(itX, itY).filter(f -> switch (f) {
         case Barrage(t = (HurtsIt | HurtsBoth), dir, _) if (dir == pdir):
-          !damage(t, itX, itY);
+          !damage(t, itX, itY, dir.x, dir.y);
         case _: true;
       });
       arena.get(itX, itY).push(It);

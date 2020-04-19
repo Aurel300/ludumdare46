@@ -32,6 +32,17 @@ class Render {
   public static var sweepTimer:Int;
   public static var bgH:Array<{x:Float, vx:Float, c:Int, w:Int}>;
   public static var bgV:Array<{y:Float, vy:Float, c:Int, h:Int}>;
+  public static var particles:Array<{x:Float, y:Float, vx:Float, vy:Float, reg:String, frame:Int, fh:Bool, fv:Bool}>;
+
+  static final tileW = 70;
+  static final tileH = 50;
+  static final tileWH = tileW >> 1;
+  static final tileHH = tileH >> 1;
+  static final tileP = 5;
+  static final tileWP = tileW + tileP;
+  static final tileHP = tileH + tileP;
+  static var arenaX:Int = 0;
+  static var arenaY:Int = 0;
 
   public static function shake(am:Int):Void {
     shakeAmount += am;
@@ -48,6 +59,20 @@ class Render {
       case _:
     }
     sweepTimer = 6;
+  }
+
+  public static function spawnP(reg:String, x:Int, y:Int, vxb:Float, vyb:Float):Void {
+    var tcX = arenaX + (x + 1) * tileWP + tileWH;
+    var tcY = arenaY + (y + 1) * tileHP + tileHH;
+    for (i in 0...5 + Std.random(10)) {
+      particles.push({
+        x: tcX + rng.rangeF(-30, 30),
+        y: tcY + rng.rangeF(-15, 15),
+        vx: rng.rangeF(-.9, .9) + vxb,
+        vy: rng.rangeF(-.2, -.05) + vyb,
+        reg: reg, frame: 0, fh: rng.bool(), fv: rng.bool()
+      });
+    }
   }
 
   public static function init(canvas:js.html.CanvasElement):Void {
@@ -104,6 +129,11 @@ class Render {
       off("bullet_US1", "ibullet_US1", 60, 0);
       off("bullet_US2", "ibullet_US2", 60, 0);
       off("bullet_US3", "ibullet_US3", 60, 0);
+      rep("smoke_dark", 5, 1, 0, 1, 0, 0);
+      rep("smoke_light", 5, 1, 0, 1, 0, 0);
+      rep("star", 4, 1, 0, 1, 0, 0);
+      rep("burst_blue", 5, 1, 0, 1, 0, 0);
+      rep("burst_purple", 5, 1, 0, 1, 0, 0);
     });
     Main.aPng.loadSignal.on(asset -> {
       surf.updateTexture(0, asset.pack["game.png"].image);
@@ -116,21 +146,10 @@ class Render {
         tick(delta);
       });
     });
-
-      /*
-    Main.input.mouse.up.on(e -> {
-      var x = (e.x / 2);
-      var y = (e.y / 2);
-      if (x >= W - 3 - 32 && x < W - 3 - 32 + 16 && y >= 3 && y < 3 + 16)
-        Sfx.enable(!Sfx.enabled);
-      if (x >= W - 3 - 16 && x < W - 3 - 16 + 16 && y >= 3 && y < 3 + 16)
-        Music.enable(!Music.enabled);
-    });
-      */
     input.keyboard.up.on(key -> if (screen == GameOver && key == KeyR) restart());
     input.mouse.move.on(e -> {
-      msx = Std.int(e.x) >> 1;
-      msy = Std.int(e.y) >> 1;
+      msx = Std.int(e.x / Fullscreen.lastSc);
+      msy = Std.int(e.y / Fullscreen.lastSc);
     });
     input.mouse.up.on(e -> {
       if (screen.match(Intro | GameOver) && msAction != null) {
@@ -147,6 +166,7 @@ class Render {
     sweepTimer = 0;
     bgH = [];
     bgV = [];
+    particles = [];
     screen = GamePlaying;
     Game.start(Classic(3, 3, 0));
   }
@@ -158,6 +178,7 @@ class Render {
   public static function tick(delta:Float):Void {
     visPhase++;
     Music.autoTick(delta);
+    Fullscreen.tick();
     var pal = texRegions["pal"];
     switch (screen) {
       case Intro:
@@ -168,8 +189,8 @@ class Render {
         if (introTimer < 80) hy -= (Math.pow((80 - introTimer) / 80, 2)) * H;
         if (introTimer < 110) tx -= (Math.pow((110 - introTimer) / 110, 2)) * W;
         drawRM(Std.int(WH + hx), Std.int(HH - 20 + hy), "title");
-        var msel = Text.line(introTut ? (HH - 2) : (HH + 10), msy);
-        Text.render(Std.int(8 + tx), introTut ? (HH - 2) : (HH + 10), introTut ? '$$bHow to play $$b
+        var msel = Text.line(introTut ? (HH - 2) : (HH - 2), msy);
+        Text.render(Std.int(8 + tx), introTut ? (HH - 2) : (HH - 2), introTut ? '$$bHow to play $$b
 
 Move around with ` @ $$$$ #.
 Hold $$bspace$$b to drag $$b$$sIT$$s$$b with you.
@@ -184,7 +205,8 @@ ${msel == 3 ? ">>" : ">"} How to play
 ${msel == 4 ? ">>" : ">"} New game
 ${msel == 5 ? ">>" : ">"} Music: ${Music.playing ? "on" : "off"}
 ${msel == 6 ? ">>" : ">"} Sound: ${Sfx.enabled ? "on" : "off"}
-${msel == 7 ? ">>" : ">"} More games');
+${msel == 7 ? ">>" : ">"} Fullscreen: ${Fullscreen.enabled ? "on" : "off"}
+${msel == 8 ? ">>" : ">"} More games');
         msAction = tx > -5. ? (introTut ? (switch (msel) {
           case 8: () -> introTut = false;
           case _: null;
@@ -195,7 +217,8 @@ ${msel == 7 ? ">>" : ">"} More games');
             if (Music.playing) Music.stop();
             else Music.play();
           case 6: () -> Sfx.enabled = !Sfx.enabled;
-          case 7: () -> js.Browser.window.open("https://www.thenet.sk/");
+          case 7: () -> Fullscreen.enabled = !Fullscreen.enabled;
+          case 8: () -> js.Browser.window.open("https://www.thenet.sk/");
           case _: null;
         })) : null;
         introTimer++;
@@ -257,15 +280,8 @@ ${msel == 6 ? ">>" : ">"} Main menu');
         var iframePhase = (Game.playerIframes % 300 < 150);
         var sframePhase = (!Game.playerSframes || visPhase % 30 < 15);
         // coordinates
-        var tileW = 70;
-        var tileH = 50;
-        var tileWH = tileW >> 1;
-        var tileHH = tileH >> 1;
-        var tileP = 5;
-        var tileWP = tileW + tileP;
-        var tileHP = tileH + tileP;
-        var arenaX = -((Game.arena.wm * tileWP - tileP) >> 1);
-        var arenaY = -((Game.arena.hm * tileHP - tileP) >> 1);
+        arenaX = -((Game.arena.wm * tileWP - tileP) >> 1);
+        arenaY = -((Game.arena.hm * tileHP - tileP) >> 1);
         var ti = 0;
         // draw tile bg
         for (y in 0...Game.arena.hm) for (x in 0...Game.arena.wm) {
@@ -410,6 +426,16 @@ ${msel == 6 ? ">>" : ">"} Main menu');
           }
           sweepTimer--;
         }
+        // particles
+        particles = [ for (p in particles) {
+          if (p.frame >= 5) continue;
+          drawRCM(Std.int(p.x), Std.int(p.y), '${p.reg}_${p.frame}', p.fh, p.fv);
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.02;
+          p.frame += Math.random() > .8 ? 1 : 0;
+          p;
+        } ];
         // ui
         drawR(0, 0, "ui_top");
         if (iframePhase) {
@@ -426,7 +452,7 @@ ${msel == 6 ? ">>" : ">"} Main menu');
         var scoreT = '$$b${Game.score}';
         var scoreW = Text.width(scoreT);
         Text.render(W - 8 - scoreW, 4, scoreT);
-        Text.render(8, H - 38, "$bBPM");
+        Text.render(8, H - 38, (Game.diff == 5 ? "$s" : "") + "$bBPM" + StringTools.lpad("", "!", Game.diff - 1));
         Text.renderDigits(8, H - 28, Game.tempoBpm);
     }
   }
@@ -442,7 +468,6 @@ ${msel == 6 ? ">>" : ">"} Main menu');
 
   static function drawR(x:Int, y:Int, n:String, ?flip:Bool = false, ?vflip:Bool = false):Void {
     if (!texRegions.exists(n)) {
-      trace('no such region: $n');
       return;
     }
     var r = texRegions[n];
@@ -451,16 +476,15 @@ ${msel == 6 ? ">>" : ">"} Main menu');
   inline static function drawRC(x:Int, y:Int, n:String, ?flip:Bool = false, ?vflip:Bool = false):Void {
     drawR(x + cameraXI, y + cameraYI, n, flip, vflip);
   }
-  static function drawRM(x:Int, y:Int, n:String):Void {
+  static function drawRM(x:Int, y:Int, n:String, ?flip:Bool = false, ?vflip:Bool = false):Void {
     if (!texRegions.exists(n)) {
-      trace('no such region: $n');
       return;
     }
     var r = texRegions[n];
-    draw(x - (r.w >> 1), y - (r.h >> 1), r.x, r.y, r.w, r.h);
+    draw(x - (r.w >> 1), y - (r.h >> 1), r.x, r.y, r.w, r.h, flip, vflip);
   }
-  inline static function drawRCM(x:Int, y:Int, n:String):Void {
-    drawRM(x + cameraXI, y + cameraYI, n);
+  inline static function drawRCM(x:Int, y:Int, n:String, ?flip:Bool = false, ?vflip:Bool = false):Void {
+    drawRM(x + cameraXI, y + cameraYI, n, flip, vflip);
   }
 
   public static function draw(x:Int, y:Int, tx:Int, ty:Int, tw:Int, th:Int, /*?alpha:Float = 1.0, ?dalpha:Float = 1.0, */?flip:Bool = false, ?vflip:Bool = false):Void {

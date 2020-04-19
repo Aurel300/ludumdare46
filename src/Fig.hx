@@ -13,7 +13,7 @@ class FigTools {
     return (switch (f) {
       case Barrage(type, dir, beat):
         if (Game.justBeat && Game.currentBeat == beat) {
-          if (Game.damage(type, at.x, at.y)) false;
+          if (Game.damage(type, at.x, at.y, dir.x, dir.y)) false;
           else {
             at.arena.get(at.x + dir.x, at.y + dir.y).pushNext(f);
             false;
